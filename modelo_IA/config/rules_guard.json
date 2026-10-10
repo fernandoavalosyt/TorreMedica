@@ -1,0 +1,72 @@
+{
+  "rules": [
+    {
+      "rule_id": "GUARD_SLEEPING",
+      "name": "Guardia dormido en su puesto",
+      "description": "SLEEPING_CRITICAL de S6: cabeza caida o postura encorvada + LME ~ 0 durante el tiempo configurado (DROWSY_SLEEP_SECONDS).",
+      "type": "simple",
+      "order": 10,
+      "applies_to_behaviors": ["guard_sleep"],
+      "scope": {"field": "behavior_type", "op": "eq", "value": "guard_sleep"},
+      "condition": {"all": [
+        {"field": "behavior_type", "op": "eq", "value": "guard_sleep"},
+        {"field": "state", "op": "eq", "value": "SUSTAINED"},
+        {"field": "evidence.guard_state", "op": "eq", "value": "SLEEPING_CRITICAL"}
+      ]},
+      "action": {
+        "event_type": "SLEEPING_GUARD",
+        "priority": "HIGH",
+        "priority_overrides": [
+          {"when": {"field": "context.schedules", "op": "contains", "value": "night_shift"}, "priority": "CRITICAL"}
+        ],
+        "cooldown_seconds": 300,
+        "confirm_count": 1,
+        "pre_roll_seconds": 25,
+        "post_roll_seconds": 10
+      }
+    },
+    {
+      "rule_id": "GUARD_INACTIVE",
+      "name": "Guardia sin desplazamiento prolongado",
+      "description": "INACTIVE_GUARD_STATION de S6: el mismo track no se desplaza por mas de DROWSY_INACTIVE_SECONDS.",
+      "type": "simple",
+      "order": 20,
+      "applies_to_behaviors": ["guard_inactive"],
+      "condition": {"all": [
+        {"field": "behavior_type", "op": "eq", "value": "guard_inactive"},
+        {"field": "state", "op": "eq", "value": "SUSTAINED"}
+      ]},
+      "action": {
+        "event_type": "GUARD_INACTIVE",
+        "priority": "MEDIUM",
+        "priority_overrides": [
+          {"when": {"field": "context.schedules", "op": "contains", "value": "night_shift"}, "priority": "HIGH"}
+        ],
+        "cooldown_seconds": 600,
+        "pre_roll_seconds": 15,
+        "post_roll_seconds": 5
+      }
+    },
+    {
+      "rule_id": "GUARD_DROWSY",
+      "name": "Guardia con somnolencia (aviso)",
+      "description": "DROWSINESS_WARNING. Desactivada: el aviso solo se muestra en el visualizador para evitar falsas alarmas. Pon enabled=true para generar evento.",
+      "enabled": false,
+      "type": "simple",
+      "order": 30,
+      "applies_to_behaviors": ["guard_sleep"],
+      "condition": {"all": [
+        {"field": "behavior_type", "op": "eq", "value": "guard_sleep"},
+        {"field": "state", "op": "eq", "value": "POSSIBLE"},
+        {"field": "duration", "op": "gte", "value": 10}
+      ]},
+      "action": {
+        "event_type": "GUARD_DROWSY",
+        "priority": "LOW",
+        "cooldown_seconds": 600,
+        "pre_roll_seconds": 15,
+        "post_roll_seconds": 5
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ function App() {
   const [error, setError] = useState(null)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const iaUrl = import.meta.env.VITE_IA_URL || 'http://localhost:5000'
 
   useEffect(() => {
     // Verificar health del backend
@@ -16,11 +17,11 @@ function App() {
       .catch(() => setError('Backend no disponible'))
 
     // Verificar health del servicio IA
-    fetch('http://localhost:8001/health')
+    fetch(`${iaUrl}/health`)
       .then(res => res.json())
       .then(data => setIaHealth(data))
       .catch(() => {/* IA puede no estar disponible aún */})
-  }, [apiUrl])
+  }, [apiUrl, iaUrl])
 
   return (
     <div className="app">
@@ -51,7 +52,7 @@ function App() {
             <p className="status-text">
               {iaHealth ? `v${iaHealth.version} — ${iaHealth.status}` : 'Conectando...'}
             </p>
-            <span className="port">:8001</span>
+            <span className="port">:5000</span>
           </div>
 
           {/* Frontend Status */}

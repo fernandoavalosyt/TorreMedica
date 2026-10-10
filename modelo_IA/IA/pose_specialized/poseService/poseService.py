@@ -135,7 +135,7 @@ COCO_KEYPOINTS: Tuple[str, ...] = (
 # para que ambos backends produzcan exactamente el mismo contrato.
 _MEDIAPIPE_TO_COCO: Tuple[int, ...] = (0, 2, 5, 7, 8, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
 
-_TRACKABLE_STATES: FrozenSet[str] = frozenset({"ACTIVE", "NEW"})
+_TRACKABLE_STATES: FrozenSet[str] = frozenset({"ACTIVE", "NEW", "RECOVERING"})
 
 
 # =============================================================================

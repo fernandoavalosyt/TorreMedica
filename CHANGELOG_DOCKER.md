@@ -85,3 +85,50 @@
 
 - El puerto 8001 se mantiene: backend (`IA_SERVICE_URL`) y frontend (`/health`) ya apuntan ahí. Frontend: `<img src="http://localhost:8001/stream" />`.
 - Los pesos `yolov8n.pt` y `yolov8n-pose.pt` se descargan solos al primer arranque dentro del volumen `ia-models` (`AUTO_DOWNLOAD_MODELS=true`).
+
+---
+
+## 2026-10-04 — Visualizador Byrack AI (Command Center) en el puerto 5000
+
+| Archivo | Cambio |
+|---------|--------|
+| `modelo_IA/IA/visualizer/visualizerService.py` | Overlay estilo centro de control: cajas tácticas por estado (NORMAL verde, LOITERING amarillo, POSSIBLE_THEFT rojo), etiquetas `ID \| clase %`, `Merodeo: Xs`, trayectorias de 30 puntos, HUD `[LIVE]` + FPS suavizado, banner de alerta crítica, JPEG 75. Nueva entrada `submit(meta)` con el contrato FrameMeta |
+| `modelo_IA/main_orchestrator.py` | Colas cortas en el camino de video (4 frames) para no acumular retraso; modo `--simulate` (escena sintética sin cámara ni modelos) |
+| `docker-compose.yml`, `.env`, `.env.example`, `modelo_IA/.env*` | Visualizador en el puerto **5000** (antes 8001) |
+| `modelo_IA/Dockerfile` | `EXPOSE 5000`, healthcheck en 5000, `fonts-dejavu-core` |
+| `modelo_IA/requirements.txt` | `Pillow` |
+| `backend/app/config.py` | `IA_SERVICE_URL=http://modelo-ia:5000` |
+| `frontend/src/App.jsx` | Health del IA en `VITE_IA_URL` (default `http://localhost:5000`) |
+
+Stream en React: `<img src="http://localhost:5000/stream" alt="Byrack" />`
+
+---
+
+## 2026-10-05 — Re-enfoque: Vigilia Guard Sleep Monitor
+
+| Archivo | Cambio |
+|---------|--------|
+| `modelo_IA/IA/drowsiness/drowsinessService.py` | **Nuevo S6 del guardia.** Head pitch/roll (35° con histéresis y postura base del guardia), shoulder slump, LME (60 cuadros / 2.5 s), cabeceo (≥2 en 10 s). Estados ALERT_ACTIVE → DROWSINESS_WARNING → SLEEPING_CRITICAL → INACTIVE_GUARD_STATION. Emite eventos `guard_sleep` / `guard_inactive` para S7 |
+| `modelo_IA/IA/drowsiness/guardSimulation.py` | Guardia sintético (despierto → cabeceos → dormido → despierta) para probar sin cámara ni modelos |
+| `modelo_IA/IA/visualizer/visualizerService.py` | Ventana local `cv2.imshow` + `waitKey(1)` (~25 fps). Flask/MJPEG congelado con `ENABLE_WEB_STREAM=False`. Overlay de guardia: verde/amarillo/rojo parpadeante, vector de cabeza, HUD de estado, LME y FPS |
+| `modelo_IA/main_orchestrator.py` | S6 = DrowsinessService (el S6 retail ya no se instancia). Captura 25 fps / inferencia 10 fps. `--simulate`, `--web`, `--no-window` |
+| `modelo_IA/config/rules_guard.json` | Reglas S7: `GUARD_SLEEPING` (alta, crítica en turno nocturno), `GUARD_INACTIVE`; `GUARD_DROWSY` desactivada |
+| `modelo_IA/config/camera_context.json` | Cámara `security` con turnos `day_shift` / `night_shift` |
+| `modelo_IA/IA/pose_specialized/poseService/poseService.py` | También procesa tracks `RECOVERING` |
+| `modelo_IA/IA/alert_service/alertService.py` | Etiquetas de eventos del guardia |
+| `docker-compose.yml` | En el contenedor no hay pantalla: `VISUALIZER_LOCAL_WINDOW=false`, `ENABLE_WEB_STREAM=true` |
+| `modelo_IA/.env*` | `VIDEO_TARGET_FPS=25`, `INFERENCE_FPS=10`, `DROWSY_*`, `ENABLE_WEB_STREAM=false` |
+
+---
+
+## 2026-10-05 — Juez Final Tier-2 con Gemini Vision
+
+| Archivo | Cambio |
+|---------|--------|
+| `modelo_IA/IA/gemini_judge/geminiJudgeService.py` | **Nuevo.** Verificación con `google-genai` (salida JSON con esquema Pydantic), `ThreadPoolExecutor`, cooldown de 10 s por guardia, recorte con 20 % de contexto en JPEG en memoria. Fail-safe: key inválida → se desactiva; 429 → pausa; timeout/5xx → veredicto local |
+| `modelo_IA/IA/drowsiness/drowsinessService.py` | Estados `VERIFYING_WITH_GEMINI` y `WORKING_DISTRACTED`. A los 10 s de condición de sueño consulta a Gemini: `true` → SLEEPING_CRITICAL; `false` → despierto + reinicio de acumuladores + veto 15 s; sin respuesta en 12 s → heurística local |
+| `modelo_IA/IA/visualizer/visualizerService.py` | Púrpura `GEMINI EVALUANDO...` con animación, rojo `DORMIDO CONFIRMADO POR GEMINI`, verde `DESPIERTO - actividad` |
+| `modelo_IA/main_orchestrator.py` | Crea el juez, buffer de frames recientes para el recorte, carga `GEMINI_API_KEY` del `.env` raíz |
+| `modelo_IA/requirements.txt`, `modelo_IA/.env.example` | `google-genai`, `pydantic`, variables `GEMINI_*` |
+
+Modelo por defecto `gemini-3.8-flash` (`gemini-1.5-flash` fue retirado de la API). Requiere `GEMINI_API_KEY` válida de Google AI Studio en el `.env` raíz; sin ella el sistema funciona solo con la heurística local.

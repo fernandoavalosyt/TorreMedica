@@ -20,10 +20,12 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # libgl1: ultralytics arrastra opencv-python (no headless), que la necesita.
+# fonts-dejavu-core: fuente TrueType del visualizador (acentos y ñ en el overlay).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
         libgomp1 \
+        fonts-dejavu-core \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,11 +41,11 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch torchvisi
 
 COPY . .
 
-# 8001: visualizador (/stream) + /health   |   8080: servicio de alertas
-EXPOSE 8001 8080
+# 5000: visualizador (/stream) + /health   |   8080: servicio de alertas
+EXPOSE 5000 8080
 
 # start-period amplio: el primer arranque descarga los pesos de YOLO.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD curl -fsS http://localhost:8001/health || exit 1
+    CMD curl -fsS http://localhost:5000/health || exit 1
 
 CMD ["python", "main_orchestrator.py"]

@@ -84,7 +84,9 @@ PRIORITY_STYLE: Dict[str, Dict[str, str]] = {
 
 EVENT_LABELS: Dict[str, str] = {
     "POSSIBLE_THEFT": "Posible robo",
-    "SLEEPING_GUARD": "Guardia con somnolencia",
+    "SLEEPING_GUARD": "Guardia dormido",
+    "GUARD_INACTIVE": "Guardia sin movimiento prolongado",
+    "GUARD_DROWSY": "Guardia con somnolencia",
     "SUSPICIOUS_BEHAVIOR": "Comportamiento sospechoso",
 }
 

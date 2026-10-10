@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # ---- IA Service ----------------------------------------------------------
-    IA_SERVICE_URL: str = "http://modelo-ia:8001"
+    IA_SERVICE_URL: str = "http://modelo-ia:5000"
 
 
 settings = Settings()

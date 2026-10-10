@@ -11,5 +11,8 @@ ultralytics              # S3 YOLO y S5 Pose
 torch
 torchvision
 Flask                    # S10 Visualizador (stream MJPEG)
+Pillow                   # S10: texto TrueType (acentos) en el overlay
 python-dotenv            # carga de modelo_IA/.env en ejecucion local
 pyyaml                   # S7: reglas en YAML (opcional)
+google-genai             # Juez Tier-2 con Gemini Vision (SDK oficial unificado)
+pydantic                 # esquema del veredicto JSON de Gemini
