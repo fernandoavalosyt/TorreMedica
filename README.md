@@ -1,4 +1,4 @@
-# Vigilia
+# Vigilia Torre-Medica
 
 Sistema de visión artificial que detecta si un guardia se está quedando dormido o ya se durmió en una zona de vigilancia, y emite una alerta. Está pensado para un puesto de guardia delimitado con una o dos cámaras (por ejemplo, en un hospital).
 
