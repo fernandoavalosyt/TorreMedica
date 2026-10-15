@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vigilia - Monitor de guardias</title>
+<style>
+  :root { --bg:#0f1419; --card:#1a2129; --line:#2a3440; --txt:#e6edf3; --mut:#8b98a5; --ok:#3fb950; --warn:#f0a020; --bad:#f85149; --acc:#4493f8; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  h1 { font-size:18px; margin:0; } h2 { font-size:15px; margin:0 0 8px; }
+  .pill { padding:2px 10px; border-radius:99px; background:var(--card); border:1px solid var(--line); color:var(--mut); font-size:12px; }
+  .pill.ok { color:var(--ok); } .pill.warn { color:var(--warn); } .pill.bad { color:var(--bad); }
+  main { padding:16px; display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; min-width:0; }
+  .wide { grid-column: 1 / -1; }
+  img.video { width:100%; border-radius:6px; background:#000; display:block; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:500; }
+  .lvl-ok { color:var(--ok); } .lvl-somnolencia { color:var(--warn); font-weight:600; } .lvl-dormido { color:var(--bad); font-weight:700; }
+  .alert { display:flex; gap:10px; padding:8px; border:1px solid var(--line); border-left-width:4px; border-radius:6px; margin-bottom:8px; }
+  .alert.dormido { border-left-color:var(--bad); } .alert.somnolencia { border-left-color:var(--warn); }
+  .alert.sistema { border-left-color:var(--acc); } .alert.resuelto { border-left-color:var(--ok); opacity:.7; }
+  .alert img { width:96px; height:64px; object-fit:cover; border-radius:4px; }
+  .alert .meta { color:var(--mut); font-size:12px; }
+  .alert.acked { opacity:.55; }
+  form { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:8px; }
+  label { display:flex; flex-direction:column; font-size:12px; color:var(--mut); gap:3px; }
+  input, select { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:5px; padding:6px 8px; font:inherit; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:5px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button.sec { background:var(--card); border:1px solid var(--line); color:var(--txt); }
+  button.del { background:var(--bad); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .msg { font-size:13px; } .msg.ok { color:var(--ok); } .msg.bad { color:var(--bad); }
+  .empty { color:var(--mut); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Vigilia</h1>
+  <span class="pill" id="gem">Gemini: ...</span>
+  <span class="pill" id="alertsPill">Alertas: 0</span>
+  <button class="sec" id="soundBtn">Activar sonido de alerta</button>
+</header>
+<main>
+  <section class="card wide" id="videos"><h2>Camaras</h2><div class="empty" id="noCams">Sin camaras. Agregue una abajo.</div></section>
+  <section class="card"><h2>Personas detectadas</h2><div id="people" class="empty">Sin personas en zona.</div></section>
+  <section class="card"><h2>Alertas</h2><div id="alerts" class="empty">Sin alertas.</div></section>
+  <section class="card wide">
+    <h2>Agregar / editar camara</h2>
+    <form id="camForm" autocomplete="off">
+      <label>ID (opcional)<input name="id" maxlength="32" placeholder="CAM-01"></label>
+      <label>Nombre<input name="name" maxlength="60" placeholder="Guardia - Pasillo A"></label>
+      <label>Protocolo<select name="protocol"><option>rtsp</option><option>rtsps</option><option>http</option><option>https</option></select></label>
+      <label>Marca (ruta del stream)<select name="brand"></select></label>
+      <label>IP / host<input name="host" placeholder="192.168.1.64"></label>
+      <label>Puerto<input name="port" type="number" min="1" max="65535" placeholder="554"></label>
+      <label>Usuario<input name="user" maxlength="64"></label>
+      <label>Contrasena<input name="password" type="password" maxlength="128" placeholder="(sin cambios si se edita)"></label>
+      <label>Ruta (opcional)<input name="path" maxlength="256" placeholder="/Streaming/Channels/102"></label>
+      <label>Zona de guardia (JSON opcional)<input name="roi" placeholder='[[0.1,0.2],[0.9,0.2],[0.9,0.9],[0.1,0.9]]'></label>
+    </form>
+    <div class="row" style="margin-top:10px">
+      <button id="testBtn" type="button" class="sec">Probar conexion</button>
+      <button id="saveBtn" type="button">Guardar y conectar</button>
+      <span class="msg" id="camMsg"></span>
+    </div>
+    <div id="camList" style="margin-top:12px"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const api = async (url, opts = {}) => {
+  const r = await fetch(url, { ...opts, headers: { "Content-Type": "application/json", "X-Requested-With": "vigilia" } });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || data.message || ("HTTP " + r.status));
+  return data;
+};
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const LEVEL = { ok: "despierta", somnolencia: "somnolienta", dormido: "DORMIDA" };
+
+["generico","hikvision","dahua","tapo","reolink","uniview","axis"].forEach(b => { const o = el("option", "", b); o.value = b; document.querySelector("[name=brand]").append(o); });
+
+let soundOn = false, ctx = null, seenAlerts = null;
+$("soundBtn").onclick = () => { soundOn = !soundOn; if (soundOn && !ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); $("soundBtn").textContent = soundOn ? "Sonido activado" : "Activar sonido de alerta"; };
+function beep(critical) {
+  if (!soundOn || !ctx) return;
+  [0, 0.35, 0.7].forEach(t => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = critical ? 960 : 640; g.gain.value = 0.15; o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.25); });
+}
+
+const cams = {};
+function renderCameras(list) {
+  $("noCams").style.display = list.length ? "none" : "";
+  const grid = $("videos");
+  for (const c of list) {
+    const id = c.camera.id;
+    let box = cams[id];
+    if (!box) {
+      box = cams[id] = { root: el("div"), title: el("div", "meta"), img: el("img", "video") };
+      box.root.style.cssText = "display:inline-block;width:calc(50% - 8px);min-width:300px;vertical-align:top;margin:0 8px 8px 0";
+      box.root.append(box.title, box.img); grid.append(box.root);
+      box.img.src = "/stream/" + encodeURIComponent(id);
+    }
+    const st = c.stream || {};
+    const state = { connected: "conectada", reconnecting: "SIN SENAL", connecting: "conectando", disabled: "deshabilitada" }[st.state] || st.state;
+    box.title.textContent = `${c.camera.name} (${id}) - ${state} - ${c.fps || 0} fps analisis` + (c.dark_mode ? " - modo nocturno" : "") + (c.face_analysis ? " - rostro: local" : " - rostro: Gemini");
+    box.title.style.color = st.state === "connected" ? "var(--mut)" : "var(--bad)";
+  }
+  for (const id of Object.keys(cams)) if (!list.find(c => c.camera.id === id)) { cams[id].root.remove(); delete cams[id]; }
+}
+
+function renderPeople(list) {
+  const rows = [];
+  for (const c of list) for (const p of c.people) rows.push([c.camera.name, p]);
+  const box = $("people"); box.replaceChildren();
+  if (!rows.length) { box.className = "empty"; box.textContent = "Sin personas en zona."; return; }
+  box.className = "";
+  const t = el("table"), head = el("tr");
+  ["Camara","ID","Estado","Punt.","Postura","Ojos cerr.","Bostezos","Quieto","Gemini"].forEach(h => head.append(el("th", "", h)));
+  t.append(head);
+  for (const [cam, p] of rows) {
+    const tr = el("tr");
+    const verdict = p.verdict ? `${p.verdict.state} (${Math.round(p.verdict.confidence * 100)}%)` : "-";
+    [cam, p.id, LEVEL[p.level] || p.level, p.puntuacion_local, p.postura, p.ojos_cerrados_pct == null ? "-" : p.ojos_cerrados_pct + "%", p.bostezos_2min, p.inmovil_seg + " s", verdict].forEach((v, i) => {
+      const td = el("td", i === 2 ? "lvl-" + p.level : "", String(v)); tr.append(td);
+    });
+    t.append(tr);
+  }
+  box.append(t);
+}
+
+function renderAlerts(list) {
+  const box = $("alerts"); box.replaceChildren();
+  if (!list.length) { box.className = "empty"; box.textContent = "Sin alertas."; return; }
+  box.className = "";
+  for (const a of list.slice(0, 15)) {
+    const d = el("div", "alert " + a.level + (a.ack ? " acked" : ""));
+    if (a.snapshot) { const i = el("img"); i.src = "/evidence/" + encodeURIComponent(a.snapshot); i.loading = "lazy"; d.append(i); }
+    const body = el("div"); body.style.flex = "1";
+    const who = a.track_id != null ? ` - persona ID ${a.track_id}` : "";
+    body.append(el("div", "lvl-" + (a.level === "dormido" ? "dormido" : a.level === "somnolencia" ? "somnolencia" : ""), a.level.toUpperCase() + " - " + a.camera_name + who));
+    body.append(el("div", "", a.reason || ""));
+    body.append(el("div", "meta", a.iso.replace("T", " ") + (a.source ? " - fuente: " + a.source : "")));
+    if (!a.ack) { const b = el("button", "sec", "Reconocer"); b.onclick = async () => { await api("/api/alerts/" + a.id + "/ack", { method: "POST", body: "{}" }); refresh(); }; body.append(b); }
+    d.append(body); box.append(d);
+  }
+}
+
+async function refresh() {
+  try {
+    const [st, alerts] = await Promise.all([api("/api/status"), api("/api/alerts?limit=30")]);
+    renderCameras(st.cameras); renderPeople(st.cameras); renderAlerts(alerts);
+    const g = st.gemini;
+    $("gem").textContent = g.active ? `Gemini: activo (${g.calls} consultas, ${g.tokens} tokens)` : `Gemini: apagado (${g.disabled_reason}) - solo heuristica local`;
+    $("gem").className = "pill " + (g.active ? "ok" : "warn");
+    $("alertsPill").textContent = "Alertas sin reconocer: " + st.active_alerts;
+    $("alertsPill").className = "pill " + (st.active_alerts ? "bad" : "ok");
+    const ids = new Set(alerts.map(a => a.id));
+    if (seenAlerts) alerts.filter(a => !seenAlerts.has(a.id) && a.level !== "resuelto").forEach(a => beep(a.level === "dormido"));
+    seenAlerts = ids;
+    renderCamList(st.cameras.map(c => c.camera));
+  } catch (e) { $("alertsPill").textContent = "Sin conexion con el servidor"; $("alertsPill").className = "pill bad"; }
+}
+
+function formData() {
+  const f = Object.fromEntries(new FormData($("camForm")).entries());
+  if (!f.port) delete f.port;
+  if (f.roi && f.roi.trim()) { try { f.roi = JSON.parse(f.roi); } catch { throw new Error("Zona de guardia: JSON invalido"); } } else delete f.roi;
+  return f;
+}
+async function submit(url, okText) {
+  const msg = $("camMsg"); msg.className = "msg"; msg.textContent = "Procesando...";
+  try { const r = await api(url, { method: "POST", body: JSON.stringify(formData()) }); msg.className = "msg ok"; msg.textContent = r.message || okText; $("camForm").elements.id.readOnly = false; refresh(); }
+  catch (e) { msg.className = "msg bad"; msg.textContent = e.message; }
+}
+$("testBtn").onclick = async () => {
+  const msg = $("camMsg"); msg.className = "msg"; msg.textContent = "Probando conexion...";
+  try { const r = await api("/api/cameras/test", { method: "POST", body: JSON.stringify(formData()) }); msg.className = "msg " + (r.ok ? "ok" : "bad"); msg.textContent = r.message; }
+  catch (e) { msg.className = "msg bad"; msg.textContent = e.message; }
+};
+$("saveBtn").onclick = () => submit("/api/cameras", "Camara guardada");
+
+let lastCamKey = "";
+function renderCamList(list) {
+  const key = JSON.stringify(list); if (key === lastCamKey) return; lastCamKey = key;
+  const box = $("camList"); box.replaceChildren();
+  for (const c of list) {
+    const row = el("div", "row"); row.style.marginBottom = "6px";
+    row.append(el("span", "pill", c.id), el("span", "", c.name + " - " + c.url));
+    const edit = el("button", "sec", "Editar"); edit.onclick = () => { const f = $("camForm"); const fe = f.elements; for (const k of ["id","name","protocol","brand","host","port","user","path"]) if (fe[k]) fe[k].value = c[k] ?? ""; fe.id.readOnly = true; fe.password.value = ""; fe.roi.value = c.roi ? JSON.stringify(c.roi) : ""; window.scrollTo(0, document.body.scrollHeight); };
+    const del = el("button", "del", "Eliminar"); del.onclick = async () => { if (confirm("Eliminar " + c.name + "?")) { await api("/api/cameras/" + encodeURIComponent(c.id), { method: "DELETE" }); refresh(); } };
+    row.append(edit, del); box.append(row);
+  }
+}
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>

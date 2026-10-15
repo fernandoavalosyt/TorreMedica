@@ -1,0 +1,11 @@
+# Vigilia MVP - una sola aplicacion Python (CPU, sin GPU)
+numpy
+opencv-python-headless
+ultralytics           # YOLO-pose + tracking (instala torch)
+lap                   # ByteTrack
+mediapipe             # opcional: ojos cerrados / bostezos locales (si falta, lo evalua Gemini)
+google-genai          # Gemini Vision
+pydantic
+Flask
+requests
+python-dotenv
